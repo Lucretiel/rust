@@ -1410,9 +1410,6 @@ pub struct Resolver<'a> {
     /// Avoid duplicated errors for "name already defined".
     name_already_seen: FxHashMap<Name, Span>,
 
-    /// If `#![feature(proc_macro)]` is set
-    proc_macro_enabled: bool,
-
     /// A set of procedural macros imported by `#[macro_use]` that have already been warned about
     warned_proc_macros: FxHashSet<Name>,
 
@@ -1711,7 +1708,7 @@ impl<'a> Resolver<'a> {
 
             // The `proc_macro` and `decl_macro` features imply `use_extern_macros`
             use_extern_macros:
-                features.use_extern_macros || features.proc_macro || features.decl_macro,
+                features.use_extern_macros || features.decl_macro,
 
             crate_loader,
             macro_names: FxHashSet(),
@@ -1725,7 +1722,6 @@ impl<'a> Resolver<'a> {
             local_macro_def_scopes: FxHashMap(),
             name_already_seen: FxHashMap(),
             whitelisted_legacy_custom_derives: Vec::new(),
-            proc_macro_enabled: features.proc_macro,
             warned_proc_macros: FxHashSet(),
             potentially_unused_imports: Vec::new(),
             struct_constructors: DefIdMap(),
@@ -4476,7 +4472,7 @@ impl<'a> Resolver<'a> {
     }
 
     fn check_proc_macro_attrs(&mut self, attrs: &[ast::Attribute]) {
-        if self.proc_macro_enabled { return; }
+        if self.use_extern_macros { return; }
 
         for attr in attrs {
             if attr.path.segments.len() > 1 {
