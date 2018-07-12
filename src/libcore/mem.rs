@@ -700,6 +700,81 @@ pub fn replace<T>(dest: &mut T, mut src: T) -> T {
     src
 }
 
+/// Modify an `&mut T` using a function which takes a `T` and returns a new `T`.
+///
+/// # Examples
+///
+/// A simple example with an Option:
+///
+/// ```
+/// use std::mem;
+///
+/// struct Data<T> {
+/// 	value: Option<T>,
+/// }
+///
+/// impl<T> Data<T> where T: Add<RHS=T, Output=T> {
+/// 	fn increment(&mut self, amount T) {
+/// 		transition(
+/// 			&mut self.value,
+/// 			move |opt| opt.map(move |val| val + amount)
+/// 		)
+/// 	}
+/// }
+///
+/// ```
+#[inline]
+pub fn transition<T, F>(target: &mut T, func: F)
+	where F: FnOnce(T) -> T,
+{
+	modify_by_value_and(target, move |value| (func(value), ()));
+}
+
+/// Same as [transition], but also returns a value based on the called
+/// function.
+///
+/// # Examples
+///
+/// A simple, stateless iterator. When you call next() on it, it consumes itself,
+/// returning the value and a new iterator.
+///
+/// ```
+/// use std::mem;
+/// use std::iter::Iterator;
+///
+/// struct Counter(usize);
+///
+/// impl Counter {
+///     fn next(self) -> (usize, Self) {
+///         (self.0, Counter(self.0 + 1))
+///     }
+/// }
+///
+/// struct CounterIter(Counter);
+///
+/// impl Iterator for CounterIter {
+///    type Item = usize;
+///
+///    fn next(&mut self) -> Option<usize> {
+///        Some(modify_by_value_and(&mut self.0, |counter| {
+///            let (value, counter) = counter.next();
+///            (counter, value)
+///        }))
+///    }
+/// }
+/// ```
+#[inline]
+pub fn transition_get<T, F, R>(target: &mut T, func: F) -> R
+	where F: FnOnce(T) -> (T, R),
+{
+	// This works because the existence of &mut target means that there are
+	// definitely no other existing references to *target.
+	// TODO: what if func panics?
+	let (updated, ret) = func(unsafe { ptr::read(target) });
+	unsafe { ptr::write(target, updated) };
+	ret
+}
+
 /// Disposes of a value.
 ///
 /// While this does call the argument's implementation of [`Drop`][drop],
