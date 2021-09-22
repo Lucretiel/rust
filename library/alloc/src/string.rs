@@ -1899,7 +1899,7 @@ impl FromIterator<Box<str>> for String {
             None => String::new(),
             Some(buf) => {
                 let mut buf = buf.into_string();
-                buf.extend(iter);
+                buf.extend(iterator);
                 buf
             }
         }
