@@ -2020,7 +2020,7 @@ impl<'a> Extend<Cow<'a, str>> for String {
     fn extend_one(&mut self, s: Cow<'a, str>) {
         match s {
             Cow::Owned(s) => self.extend_one(s),
-            Cow::Borrowed(s) => self.push_str(s),
+            Cow::Borrowed(s) => self.push_str(&s),
         }
     }
 }
