@@ -1880,9 +1880,6 @@ impl FromIterator<String> for String {
     fn from_iter<I: IntoIterator<Item = String>>(iter: I) -> String {
         let mut iterator = iter.into_iter();
 
-        // Because we're iterating over `String`s, we can avoid at least
-        // one allocation by getting the first string from the iterator
-        // and appending to it all the subsequent strings.
         match iterator.next() {
             None => String::new(),
             Some(mut buf) => {
@@ -1897,9 +1894,15 @@ impl FromIterator<String> for String {
 #[stable(feature = "box_str2", since = "1.45.0")]
 impl FromIterator<Box<str>> for String {
     fn from_iter<I: IntoIterator<Item = Box<str>>>(iter: I) -> String {
-        let mut buf = String::new();
-        buf.extend(iter);
-        buf
+        let mut iterator = iter.into_iter();
+        match iterator.next() {
+            None => String::new(),
+            Some(buf) => {
+                let mut buf = buf.into_string();
+                buf.extend(iter);
+                buf
+            }
+        }
     }
 }
 
@@ -1909,9 +1912,6 @@ impl<'a> FromIterator<Cow<'a, str>> for String {
     fn from_iter<I: IntoIterator<Item = Cow<'a, str>>>(iter: I) -> String {
         let mut iterator = iter.into_iter();
 
-        // Because we're iterating over CoWs, we can (potentially) avoid at least
-        // one allocation by getting the first item and appending to it all the
-        // subsequent items.
         match iterator.next() {
             None => String::new(),
             Some(cow) => {
@@ -1979,7 +1979,16 @@ impl<'a> Extend<&'a str> for String {
 #[stable(feature = "box_str2", since = "1.45.0")]
 impl Extend<Box<str>> for String {
     fn extend<I: IntoIterator<Item = Box<str>>>(&mut self, iter: I) {
-        iter.into_iter().for_each(move |s| self.push_str(&s));
+        iter.into_iter().for_each(move |s| self.extend_one(s));
+    }
+
+    #[inline]
+    fn extend_one(&mut self, s: Box<str>) {
+        if self.is_empty() && s.len() >= self.capacity() {
+            *self = s.into_string();
+        } else {
+            self.push_str(&s);
+        }
     }
 }
 
@@ -1987,12 +1996,16 @@ impl Extend<Box<str>> for String {
 #[stable(feature = "extend_string", since = "1.4.0")]
 impl Extend<String> for String {
     fn extend<I: IntoIterator<Item = String>>(&mut self, iter: I) {
-        iter.into_iter().for_each(move |s| self.push_str(&s));
+        iter.into_iter().for_each(move |s| self.extend_one(s))
     }
 
     #[inline]
     fn extend_one(&mut self, s: String) {
-        self.push_str(&s);
+        if self.is_empty() && s.capacity() >= self.capacity() {
+            *self = s
+        } else {
+            self.push_str(&s)
+        }
     }
 }
 
@@ -2000,12 +2013,15 @@ impl Extend<String> for String {
 #[stable(feature = "herd_cows", since = "1.19.0")]
 impl<'a> Extend<Cow<'a, str>> for String {
     fn extend<I: IntoIterator<Item = Cow<'a, str>>>(&mut self, iter: I) {
-        iter.into_iter().for_each(move |s| self.push_str(&s));
+        iter.into_iter().for_each(move |s| self.extend_one(s))
     }
 
     #[inline]
     fn extend_one(&mut self, s: Cow<'a, str>) {
-        self.push_str(&s);
+        match s {
+            Cow::Owned(s) => self.extend_one(s),
+            Cow::Borrowed(s) => self.push_str(s),
+        }
     }
 }
 
